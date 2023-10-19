@@ -8,9 +8,7 @@ export const getCurrentlocation = async () => {
     const liveLat = position.coords.latitude;
     const liveLong = position.coords.longitude;
 
-    // console.log("Your current position is:");
-    // console.log("Latitude: " + liveLat);
-    // console.log("Longitude: " + liveLong);
+    const forecastUrl = `https://weatherapi-com.p.rapidapi.com/forecast.json?q=${liveLat}%2C${liveLong}&days=5`;
 
     const url = `https://weatherapi-com.p.rapidapi.com/current.json?q=${liveLat},${liveLong}`;
     const options = {
@@ -23,7 +21,15 @@ export const getCurrentlocation = async () => {
 
     const response = await fetch(url, options);
     const result = await response.json();
-    return result;
+
+    //forecast
+    const forecastResponse = await fetch(forecastUrl, options)
+    const forecastResult = await forecastResponse.json();
+
+    const data = { current: result, forecast: forecastResult }
+
+    return data;
+
   } catch (error) {
     console.error(error);
     return null; // Handle the error as needed

@@ -2,25 +2,46 @@ import React, { useState, useEffect } from 'react'
 import { getCurrentlocation } from './getCurrentlocation.jsx';
 import WindSpeedSvg from "../img/animated/wind-speed.svg";
 import PressureSvg from "../img/animated/pressure.svg";
-import sunrise from "../img/animated/sunrise.svg"
+import SunriseSvg from "../img/animated/sunrise.svg"
 import HumiditySvg from "../img/animated/humidity.svg";
 import Visibility from "../img/animated/visibility.svg"
 import SunsetSvg from "../img/animated/sunset.svg";
+import { getWeatherData } from './getWeatherData.jsx';
+import { ToastContainer, toast } from 'react-toastify';
+import "react-toastify/dist/ReactToastify.css";
+import { getForecastData } from './getForecastData.jsx';
+import { formatDate, formatLocalTime, formatNextHours, formatTime, to24HourTime } from './formatDate.jsx';
+import DailyWeatherCard from './dailyWeatherCard.jsx';
+import HourlyWeatherCard from './hourlyWeatherCard.jsx';
 
 const Home = () => {
 
   const[loading, setLoading] = useState(true);
-  const [currentLocation, setCurrentLocation] = useState({})
+  const [currentLocation, setCurrentLocation] = useState({});
+  const [forecastLocation, setForecastLocation] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeDay, setActiveDay] = useState({});
+  const [sunrise, setSunrise] = useState("");
+  const [sunset, setSunset] = useState("");
+  const [nextHours, setNextHours] = useState([]);
   
-  async function someFunction() {
+  async function setLocation() {
     try {
       const locationResult = await getCurrentlocation();
-      setLoading(false)
       // setCurrentLocation(locationResult);
       // Now, 'locationResult' contains the result from 'getCurrentlocation'.
-      // console.log('Location result:', locationResult);
-      setCurrentLocation(locationResult);
+      setCurrentLocation(locationResult.current);
+      const forecastDays = await formatDate(locationResult.forecast.forecast.forecastday);
+      console.log(locationResult);
+      setForecastLocation(forecastDays)
+      setActiveDay(forecastDays[0])
+      setSunrise(to24HourTime(forecastDays[0].astro.sunrise));
+      setSunset(to24HourTime(forecastDays[0].astro.sunset));
+      const locNextHours = formatNextHours(locationResult.current, forecastDays[0]);
+      setNextHours(locNextHours);
       // You can further process or use 'locationResult' as needed in the rest of your function.
+      setLoading(false)
     } catch (error) {
       console.error('Error:', error);
       setLoading(false)
@@ -29,13 +50,74 @@ const Home = () => {
   }
   // Call the function that retrieves and uses the location data.
   useEffect(()=>{
-    someFunction();
+    setLocation();
     console.log(currentLocation);
   }, []);
+
+  useEffect(() => {
+    const handleKeyUp = async (event) => {
+      if (event.keyCode === 13) {
+        setLoading(true);
+        const locationResult = await getWeatherData(searchQuery);
+        console.log(locationResult);
+        if (!locationResult.location || !locationResult.current) {
+          toast.error(locationResult.error.message, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "light",
+          });
+          setLoading(false);
+          return;
+        }
+        toast.success(`Displaying weather for ${locationResult.location.name}`, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "light",
+          });
+        setCurrentLocation(locationResult);
+        console.log(locationResult);
+        const forecastDays = await getForecastData(searchQuery);
+        const formatForecastDays = await formatDate(forecastDays.forecast.forecastday)
+        console.log(formatForecastDays);
+        setForecastLocation(formatForecastDays)
+        setActiveDay(formatForecastDays[0]);
+        setSunrise(to24HourTime(formatForecastDays[0].astro.sunrise));
+        setSunset(to24HourTime(formatForecastDays[0].astro.sunset));
+        const locNextHours = formatNextHours(locationResult, formatForecastDays[0]);
+        setNextHours(locNextHours);
+        setLoading(false)
+      }
+    };
+    document.addEventListener('keyup', handleKeyUp);
+    // Cleanup the event listener when the component unmounts
+    return () => {
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [searchQuery]); // Run the effect whenever searchQuery changes
+
+  const handleChangeActive = (itemIndex) => {
+    setActiveIndex(itemIndex)
+    forecastLocation.forEach((item, index)=> {
+      if (itemIndex === index) {
+        setActiveDay(item)
+      }
+    })
+  }
+
   return (
     <>
-    <div class="header">
-      <div class="logo">
+    <div className="header">
+      <div className="logo">
         <svg width="98" height="24" viewBox="0 0 98 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M12 4C8.25317 4 5.07693 6.72606 4.92098 10.2808C3.19811 11.1021 2 12.8527 2 14.8903C2 17.7232 4.31288 20 7.1417 20L16.3725 20C19.4696 20 22 17.5075 22 14.4086C22 12.2522 20.7729 10.3885 18.986 9.45568C18.4142 6.30972 15.4541 4 12 4Z"
@@ -71,8 +153,8 @@ const Home = () => {
           />
         </svg>
       </div>
-      <div class="search-box">
-        <div class="search-box-icon">
+      <div className="search-box">
+        <div className="search-box-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M3.31573 13.7811L4.04591 13.6098L3.31573 13.7811ZM3.31573 8.324L4.04591 8.49528L3.31573 8.324ZM18.7893 8.324L19.5195 8.15273L18.7893 8.324ZM18.7893 13.781L19.5195 13.9523L18.7893 13.781ZM13.781 18.7893L13.6098 18.0591L13.781 18.7893ZM8.324 18.7893L8.15273 19.5195L8.324 18.7893ZM8.324 3.31573L8.15272 2.58555L8.324 3.31573ZM13.781 3.31573L13.9523 2.58555L13.781 3.31573ZM20.4697 21.5303C20.7626 21.8232 21.2374 21.8232 21.5303 21.5303C21.8232 21.2374 21.8232 20.7626 21.5303 20.4697L20.4697 21.5303ZM4.04591 13.6098C3.65136 11.9278 3.65136 10.1773 4.04591 8.49528L2.58555 8.15272C2.13815 10.06 2.13815 12.045 2.58555 13.9523L4.04591 13.6098ZM18.0591 8.49528C18.4537 10.1773 18.4537 11.9278 18.0591 13.6098L19.5195 13.9523C19.9669 12.045 19.9669 10.06 19.5195 8.15273L18.0591 8.49528ZM13.6098 18.0591C11.9278 18.4537 10.1773 18.4537 8.49528 18.0591L8.15273 19.5195C10.06 19.9669 12.045 19.9669 13.9523 19.5195L13.6098 18.0591ZM8.49528 4.04591C10.1773 3.65136 11.9278 3.65136 13.6098 4.04591L13.9523 2.58555C12.045 2.13815 10.06 2.13815 8.15272 2.58555L8.49528 4.04591ZM8.49528 18.0591C6.28757 17.5413 4.56377 15.8175 4.04591 13.6098L2.58555 13.9523C3.23351 16.7147 5.39038 18.8715 8.15273 19.5195L8.49528 18.0591ZM13.9523 19.5195C16.7147 18.8715 18.8715 16.7147 19.5195 13.9523L18.0591 13.6098C17.5413 15.8175 15.8175 17.5413 13.6098 18.0591L13.9523 19.5195ZM13.6098 4.04591C15.8175 4.56377 17.5413 6.28757 18.0591 8.49528L19.5195 8.15273C18.8715 5.39037 16.7147 3.23351 13.9523 2.58555L13.6098 4.04591ZM8.15272 2.58555C5.39037 3.23351 3.23351 5.39037 2.58555 8.15272L4.04591 8.49528C4.56377 6.28756 6.28757 4.56377 8.49528 4.04591L8.15272 2.58555ZM16.8048 17.8655L20.4697 21.5303L21.5303 20.4697L17.8655 16.8048L16.8048 17.8655Z"
@@ -80,48 +162,32 @@ const Home = () => {
             />
           </svg>
         </div>
-        <input class="search-box-input" placeholder="Ankara" type="text" tabindex="1" />
-        <div class="gps-button" tabindex="2">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M12.3183 3.02096C13.2834 3.14866 14.0047 3.97164 14.0047 4.94523V6.32812C15.7135 6.9321 17.0679 8.28647 17.6719 9.9953H19.0548C20.0284 9.9953 20.8513 10.7166 20.979 11.6818C21.007 11.893 21.007 12.107 20.979 12.3183C20.8513 13.2834 20.0284 14.0047 19.0548 14.0047H17.6719C17.0679 15.7135 15.7135 17.0679 14.0047 17.6719V19.0548C14.0047 20.0284 13.2834 20.8513 12.3183 20.979C12.107 21.007 11.893 21.007 11.6818 20.979C10.7166 20.8513 9.9953 20.0284 9.9953 19.0548V17.6719C8.28647 17.0679 6.9321 15.7135 6.32812 14.0047H4.94523C3.97163 14.0047 3.14866 13.2834 3.02096 12.3183C2.99301 12.107 2.99301 11.893 3.02096 11.6818C3.14866 10.7166 3.97164 9.9953 4.94525 9.9953H6.32812C6.9321 8.28647 8.28647 6.9321 9.9953 6.32812V4.94525C9.9953 3.97164 10.7166 3.14866 11.6818 3.02096C11.893 2.99301 12.107 2.99301 12.3183 3.02096Z"
-              stroke="#0F172A"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M9.5 12C9.5 10.6193 10.6193 9.5 12 9.5C13.3807 9.5 14.5 10.6193 14.5 12C14.5 13.3807 13.3807 14.5 12 14.5C10.6193 14.5 9.5 13.3807 9.5 12Z"
-              stroke="#0F172A"
-              stroke-width="1.5"
-            />
-          </svg>
-        </div>
+        <input className="search-box-input" placeholder="Ankara" type="text" onChange={(e) => setSearchQuery(e.target.value)} tabIndex="1" />
       </div>
     </div>
-    <div class="heading">Today Overview</div>
-    <div class="current-weather-section">
-      <div class="current-weather-card">
-        <img class={`current-weather-icon dynamic-data ${loading ? 'loading' : ''}`} src={`${loading ? '' : currentLocation.current.condition.icon}`} alt='weather' />
-        <div class={`current-weather-temperature dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.temp_c}`}°C</div>
-        <div class= {`current-weather-description dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.condition.text}`}</div>
-        <div class="divider"></div>
-        <div class="current-location-container">
+    <div className="heading">Today Overview</div>
+    <div className="current-weather-section">
+      <div className="current-weather-card">
+        <img className={`current-weather-icon dynamic-data ${loading ? 'loading' : ''}`} src={`${loading ? '' : currentLocation.current.condition.icon}`} alt='weather' />
+        <div className={`current-weather-temperature dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.temp_c}`}°C</div>
+        <div className= {`current-weather-description dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.condition.text}`}</div>
+        <div className="divider"></div>
+        <div className="current-location-container">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M20 11.1755C20 15.6907 16.4183 21 12 21C7.58172 21 4 15.6907 4 11.1755C4 6.66029 7.58172 3 12 3C16.4183 3 20 6.66029 20 11.1755Z"
               stroke="#0F172A"
-              stroke-width="1.5"
+              strokeWidth="1.5"
             />
             <path
               d="M9.5 10.5C9.5 9.11929 10.6193 8 12 8C13.3807 8 14.5 9.11929 14.5 10.5C14.5 11.8807 13.3807 13 12 13C10.6193 13 9.5 11.8807 9.5 10.5Z"
               stroke="#0F172A"
-              stroke-width="1.5"
+              strokeWidth="1.5"
             />
           </svg>
-          <div class={`current-location dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.location.country}`}</div>
+          <div className={`current-location dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.location.country}`}</div>
         </div>
-        <div class="current-date-container">
+        <div className="current-date-container">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M3.83327 15.2485L4.56432 15.0809L3.83327 15.2485ZM3.83327 9.35323L4.56432 9.52078L3.83327 9.35323ZM20.1667 9.35323L19.4357 9.52079L20.1667 9.35323ZM20.1667 15.2485L19.4357 15.0809L20.1667 15.2485ZM14.8801 20.6589L15.0552 21.3882L14.8801 20.6589ZM9.11986 20.6589L9.29493 19.9296L9.11986 20.6589ZM9.11985 3.94279L9.29493 4.67207L9.11985 3.94279ZM14.8801 3.94279L15.0552 3.21351L14.8801 3.94279ZM8.82008 3C8.82008 2.58579 8.48429 2.25 8.07008 2.25C7.65587 2.25 7.32008 2.58579 7.32008 3H8.82008ZM7.32008 5.51375C7.32008 5.92796 7.65587 6.26375 8.07008 6.26375C8.48429 6.26375 8.82008 5.92796 8.82008 5.51375H7.32008ZM16.6799 3C16.6799 2.58579 16.3441 2.25 15.9299 2.25C15.5157 2.25 15.1799 2.58579 15.1799 3H16.6799ZM15.1799 5.51375C15.1799 5.92796 15.5157 6.26375 15.9299 6.26375C16.3441 6.26375 16.6799 5.92796 16.6799 5.51375H15.1799ZM4.56432 15.0809C4.14523 13.2524 4.14523 11.3493 4.56432 9.52078L3.10223 9.18568C2.63259 11.2347 2.63259 13.367 3.10223 15.416L4.56432 15.0809ZM19.4357 9.52079C19.8548 11.3493 19.8548 13.2524 19.4357 15.0809L20.8978 15.416C21.3674 13.367 21.3674 11.2347 20.8978 9.18568L19.4357 9.52079ZM14.7051 19.9296C12.9258 20.3568 11.0742 20.3568 9.29493 19.9296L8.94478 21.3882C10.9542 21.8706 13.0458 21.8706 15.0552 21.3882L14.7051 19.9296ZM9.29493 4.67207C11.0742 4.24493 12.9258 4.24493 14.7051 4.67207L15.0552 3.21351C13.0458 2.73111 10.9542 2.73111 8.94478 3.21351L9.29493 4.67207ZM9.29493 19.9296C6.95607 19.3682 5.11769 17.4953 4.56432 15.0809L3.10223 15.416C3.77946 18.3708 6.03739 20.6902 8.94478 21.3882L9.29493 19.9296ZM15.0552 21.3882C17.9626 20.6902 20.2205 18.3708 20.8978 15.416L19.4357 15.0809C18.8823 17.4953 17.0439 19.3682 14.7051 19.9296L15.0552 21.3882ZM14.7051 4.67207C17.0439 5.23355 18.8823 7.10642 19.4357 9.52079L20.8978 9.18568C20.2205 6.23089 17.9626 3.91147 15.0552 3.21351L14.7051 4.67207ZM8.94478 3.21351C6.03739 3.91147 3.77946 6.23089 3.10223 9.18568L4.56432 9.52078C5.11769 7.10641 6.95607 5.23355 9.29493 4.67207L8.94478 3.21351ZM4.14016 9.02886H19.8598V7.52886H4.14016V9.02886ZM7.32008 3V5.51375H8.82008V3H7.32008ZM15.1799 3V5.51375H16.6799V3H15.1799Z"
@@ -132,61 +198,78 @@ const Home = () => {
               fill="#0F172A"
             />
           </svg>
-          <div class={`current-date dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.location.localtime}`}</div>
+          <div className={`current-date dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : formatLocalTime(currentLocation.location.localtime)}`}</div>
         </div>
       </div>
-      <div class="current-weather-details-left">
-        <div class="wind-speed-card">
-          <img src={WindSpeedSvg} alt='wind-speed' class="wind-speed-icon" />
-          <div class="wind-speed-details">
-            <div class="wind-speed-title">Wind Speed</div>
-            <div class={`wind-speed-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.wind_kph}`} km/h</div>
+      <div className="current-weather-details-left">
+        <div className="wind-speed-card">
+          <img src={WindSpeedSvg} alt='wind-speed' className="wind-speed-icon" />
+          <div className="wind-speed-details">
+            <div className="wind-speed-title">Wind Speed</div>
+            <div className={`wind-speed-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.wind_kph}`} km/h</div>
           </div>
         </div>
-        <div class="pressure-card">
-          <img src={PressureSvg} alt= "pressure" class="pressure-icon" />
-          <div class="pressure-details">
-            <div class="pressure-title">Pressure</div>
-            <div class="pressure-value dynamic-data  ${loading ? 'loading' : ''">{`${loading ? '' : currentLocation.current.pressure_mb}`} hPa</div>
+        <div className="pressure-card">
+          <img src={PressureSvg} alt= "pressure" className="pressure-icon" />
+          <div className="pressure-details">
+            <div className="pressure-title">Pressure</div>
+            <div className="pressure-value dynamic-data  ${loading ? 'loading' : ''">{`${loading ? '' : currentLocation.current.pressure_mb}`} hPa</div>
           </div>
         </div>
-        <div class="sunrise-card">
-          <img src={sunrise} alt='sunrise' class="sunrise-icon" />
-          <div class="sunrise-details">
-            <div class="sunrise-title">Sunrise</div>
-            <div class={`sunrise-value dynamic-data  ${loading ? 'loading' : ''}`}>&nbsp;</div>
-          </div>
-        </div>
-      </div>
-      <div class="current-weather-details-right">
-        <div class="humidity-card">
-          <img src={HumiditySvg} alt='humidity' class="humidity-icon" />
-          <div class="humidity-details">
-            <div class="humidity-title">Humidity</div>
-            <div class={`humidity-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.humidity}`}%</div>
-          </div>
-        </div>
-        <div class="visibility-card">
-          <img src={Visibility} alt='visibility' class="visibility-icon" />
-          <div class="visibility-details">
-            <div class="visibility-title">Visibility</div>
-            <div class={`visibility-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.vis_km}`} km</div>
-          </div>
-        </div>
-        <div class="sunset-card">
-          <img src={SunsetSvg} alt='sunset' class="sunset-icon" />
-          <div class="sunset-details">
-            <div class="sunset-title">Sunset</div>
-            <div class={`sunset-value dynamic-data  ${loading ? 'loading' : ''}`}>&nbsp;</div>
+        <div className="sunrise-card">
+          <img src={SunriseSvg} alt='sunrise' className="sunrise-icon" />
+          <div className="sunrise-details">
+            <div className="sunrise-title">Sunrise</div>
+            <div className={`sunrise-value dynamic-data  ${loading ? 'loading' : ''}`}>{sunrise}</div>
           </div>
         </div>
       </div>
-      <div class="hourly-weather-forecast-section"></div>
+      <div className="current-weather-details-right">
+        <div className="humidity-card">
+          <img src={HumiditySvg} alt='humidity' className="humidity-icon" />
+          <div className="humidity-details">
+            <div className="humidity-title">Humidity</div>
+            <div className={`humidity-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.humidity}`}%</div>
+          </div>
+        </div>
+        <div className="visibility-card">
+          <img src={Visibility} alt='visibility' className="visibility-icon" />
+          <div className="visibility-details">
+            <div className="visibility-title">Visibility</div>
+            <div className={`visibility-value dynamic-data  ${loading ? 'loading' : ''}`}>{`${loading ? '' : currentLocation.current.vis_km}`} km</div>
+          </div>
+        </div>
+        <div className="sunset-card">
+          <img src={SunsetSvg} alt='sunset' className="sunset-icon" />
+          <div className="sunset-details">
+            <div className="sunset-title">Sunset</div>
+            <div className={`sunset-value dynamic-data  ${loading ? 'loading' : ''}`}>{sunset}</div>
+          </div>
+        </div>
+      </div>
+      <div className='hourly-weather-forecast-section'>
+        { nextHours && nextHours.map((item, index) => {
+          return <HourlyWeatherCard key={index} time={item.time} temp={item.temp_c} loading={loading}/>
+        }) }
+      </div>
     </div>
-    <div class="heading">Next 5 Days</div>
-    <div class="daily-forecast-section"></div>
-    <div class="footer">
-      <div class="logo">
+    <div className="heading">Next 5 Days</div>
+    <div className="filter-container">
+      {forecastLocation.map((item, index) => (
+        <> 
+          <div key={index} className={`filter-item ${activeIndex === index ? 'active': ''}`} onClick={() => handleChangeActive(index)}>{item.formattedDate}</div>
+        </>
+      ))}
+    </div>
+    <div className="daily-forecast-section">
+      {activeDay.hour && activeDay.hour.map((item, index) => {
+        if (index % 3 === 0) {
+          return <DailyWeatherCard key={index} date={activeDay.formattedDate} time={formatTime(item.time)} icon={item.condition.icon} description={item.condition.text} temp={item.temp_c} loading={loading} />
+        }
+      })}
+    </div>
+    <div className="footer">
+      <div className="logo">
         <svg width="98" height="24" viewBox="0 0 98 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M12 4C8.25317 4 5.07693 6.72606 4.92098 10.2808C3.19811 11.1021 2 12.8527 2 14.8903C2 17.7232 4.31288 20 7.1417 20L16.3725 20C19.4696 20 22 17.5075 22 14.4086C22 12.2522 20.7729 10.3885 18.986 9.45568C18.4142 6.30972 15.4541 4 12 4Z"
@@ -222,19 +305,8 @@ const Home = () => {
           />
         </svg>
       </div>
-      <div class="attribution">Weather data provided by OpenWeather</div>
-      <div class="top-button" tabindex="5">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M7 14.5L12 9.5L17 14.5"
-            stroke="#0F172A"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </div>
     </div>
+    <ToastContainer />
     </>
   )
 }
